@@ -280,7 +280,38 @@ fn main() {
     add_link_search_path(&out.join("build")).unwrap();
 
     println!("cargo:rustc-link-search=native={}", destination.display());
-    if cfg!(feature = "intel-sycl") {
+
+    // Check if system GGML is being used
+    let use_system_ggml = env::var("WHISPER_USE_SYSTEM_GGML")
+        .map(|v| v == "ON" || v == "1" || v == "true")
+        .unwrap_or(false);
+
+    if use_system_ggml {
+        // When using system GGML, parse CMakeCache.txt to find library paths
+        let cmake_cache = out.join("build/CMakeCache.txt");
+        if cmake_cache.exists() {
+            let cache_content = std::fs::read_to_string(&cmake_cache)
+                .expect("Failed to read CMakeCache.txt");
+
+            // Extract ggml library directory from cmake cache
+            // ggml_DIR points to lib/cmake/ggml, we need lib/
+            if let Some(line) = cache_content.lines()
+                .find(|l| l.starts_with("ggml_DIR:PATH="))
+            {
+                if let Some(ggml_dir) = line.split('=').nth(1) {
+                    let ggml_cmake_dir = PathBuf::from(ggml_dir);
+                    let ggml_lib_dir = ggml_cmake_dir.parent().unwrap().parent().unwrap();
+                    println!("cargo:rustc-link-search=native={}", ggml_lib_dir.display());
+                }
+            }
+        }
+
+        // Link against system GGML libraries
+        println!("cargo:rustc-link-lib=static=whisper");
+        println!("cargo:rustc-link-lib=static=ggml");
+        println!("cargo:rustc-link-lib=static=ggml-base");
+        println!("cargo:rustc-link-lib=static=ggml-cpu");
+    } else if cfg!(feature = "intel-sycl") {
         println!("cargo:rustc-link-lib=whisper");
         println!("cargo:rustc-link-lib=ggml");
         println!("cargo:rustc-link-lib=ggml-base");
