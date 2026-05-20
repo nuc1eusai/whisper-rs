@@ -160,6 +160,18 @@ fn main() {
         return;
     }
 
+    // Declare env-var rerun triggers for the system-ggml integration path.
+    // Without these, Cargo's incremental check can skip re-running build.rs
+    // when callers flip these vars, leaving stale `-D` flags in the cmake
+    // build dir and silently falling back to the bundled-ggml path. The
+    // forwarding loop below still propagates anything WHISPER_* / CMAKE_*
+    // (so this list does not need to be exhaustive), but the cargo rerun
+    // signal needs explicit declarations to avoid the stale-cache trap.
+    println!("cargo:rerun-if-env-changed=WHISPER_USE_SYSTEM_GGML");
+    println!("cargo:rerun-if-env-changed=CMAKE_PREFIX_PATH");
+    println!("cargo:rerun-if-env-changed=CMAKE_GENERATOR");
+    println!("cargo:rerun-if-env-changed=CMAKE_BUILD_TYPE");
+
     let mut config = Config::new(&whisper_root);
 
     config
